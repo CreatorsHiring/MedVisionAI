@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { Eye, ShieldCheck, UserCheck, Lock, User, ArrowRight, CheckCircle2, Sparkles, Activity, MessageSquare } from 'lucide-react';
@@ -11,8 +11,18 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { user, login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      if (user.role === 'PATIENT') {
+        navigate('/patient/dashboard', { replace: true });
+      } else {
+        navigate('/worker/dashboard', { replace: true });
+      }
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,9 +45,9 @@ const Login = () => {
       const userData = meRes.data;
 
       if (userData.role === 'PATIENT') {
-        navigate('/patient');
+        navigate('/patient/dashboard', { replace: true });
       } else {
-        navigate('/worker');
+        navigate('/worker/dashboard', { replace: true });
       }
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'Invalid username or password. Please try again.');
@@ -51,12 +61,12 @@ const Login = () => {
       
       {/* Header */}
       <header className="cream-navbar">
-        <div className="nav-brand">
+        <Link to="/" className="nav-brand">
           <div className="nav-logo-box">
             <Eye className="w-5 h-5 text-white" />
           </div>
           <span className="nav-brand-text">MedVision<span>AI</span></span>
-        </div>
+        </Link>
       </header>
 
       {/* Main Content Area */}

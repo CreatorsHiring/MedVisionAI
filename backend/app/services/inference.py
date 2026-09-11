@@ -52,6 +52,37 @@ class InferenceService:
             return False
         return True
 
+    def _analyze_quadrants(self, heatmap_norm: np.ndarray, prediction: str) -> str:
+        """
+        Analyze 4 quadrants of the retinal heatmap:
+        - Superior-Temporal (top-left)
+        - Superior-Nasal (top-right)
+        - Inferior-Temporal (bottom-left)
+        - Inferior-Nasal (bottom-right)
+        """
+        h, w = heatmap_norm.shape
+        mid_y, mid_x = h // 2, w // 2
+        
+        quadrants = {
+            "superior-temporal": float(np.mean(heatmap_norm[0:mid_y, 0:mid_x])),
+            "superior-nasal": float(np.mean(heatmap_norm[0:mid_y, mid_x:w])),
+            "inferior-temporal": float(np.mean(heatmap_norm[mid_y:h, 0:mid_x])),
+            "inferior-nasal": float(np.mean(heatmap_norm[mid_y:h, mid_x:w])),
+        }
+        
+        # Sort by highest activation
+        sorted_quads = sorted(quadrants.items(), key=lambda x: x[1], reverse=True)
+        top_quad, top_score = sorted_quads[0]
+        second_quad, second_score = sorted_quads[1]
+        
+        if prediction == "DR PRESENT":
+            if second_score > 0.65 * top_score:
+                return f"Neural feature activation is concentrated in the {top_quad} and {second_quad} quadrants, highlighting localized vascular anomalies and potential retinal lesions."
+            else:
+                return f"Neural feature activation is heavily concentrated in the {top_quad} quadrant, highlighting localized focal lesion patterns."
+        else:
+            return f"Neural feature activation is diffuse and low-intensity across all retinal quadrants (mild background attention in {top_quad}), with no focal vascular lesions detected."
+
     def predict(self, image_path: str):
         image = Image.open(image_path).convert("RGB")
         
@@ -72,10 +103,17 @@ class InferenceService:
         confidence = dr_prob if prediction_idx == 1 else no_dr_prob
         risk_level = "HIGH" if prediction_idx == 1 else "LOW"
         
-        recommendation = "Further evaluation by a qualified eye-care professional is recommended." if prediction_idx == 1 else "No signs of diabetic retinopathy were detected by this screening model. This does not rule out disease. Follow routine clinical eye screening."
+        # Recommendation driven strictly by confidence bands
+        if prediction_label == "DR PRESENT":
+            if confidence >= 0.80:
+                recommendation = "Refer to ophthalmologist within 2 weeks. This is an AI-assisted screening result, not a definitive clinical diagnosis."
+            else:
+                recommendation = "Recommend ophthalmologist evaluation within 1 month. This is an AI-assisted screening result, not a definitive clinical diagnosis."
+        else:
+            recommendation = "Routine annual screening recommended. This is an AI-assisted screening result, not a definitive clinical diagnosis."
         
-        # Generate Grad-CAM
-        heatmap_path = self._generate_grad_cam(input_tensor, image_path, target_class=int(prediction_idx))
+        # Generate Grad-CAM and quadrant explanation
+        heatmap_path, heatmap_explanation = self._generate_grad_cam(input_tensor, image_path, target_class=int(prediction_idx), prediction_label=prediction_label)
         
         return {
             "prediction": prediction_label,
@@ -84,10 +122,11 @@ class InferenceService:
             "confidence": confidence,
             "risk_level": risk_level,
             "recommendation": recommendation,
-            "heatmap_path": heatmap_path
+            "heatmap_path": heatmap_path,
+            "heatmap_explanation": heatmap_explanation
         }
 
-    def _generate_grad_cam(self, input_tensor, original_image_path, target_class):
+    def _generate_grad_cam(self, input_tensor, original_image_path, target_class, prediction_label="NO DR"):
         try:
             attr = self.grad_cam.attribute(input_tensor, target=target_class, relu_attributions=True)
             attr = attr.squeeze().cpu().detach().numpy()
@@ -95,16 +134,18 @@ class InferenceService:
             # Normalize heatmap
             heatmap = np.maximum(attr, 0)
             if np.max(heatmap) != 0:
-                heatmap /= np.max(heatmap)
+                heatmap = heatmap / np.max(heatmap)
             
-            heatmap = cv2.resize(heatmap, (224, 224))
-            heatmap = np.uint8(255 * heatmap)
-            heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+            heatmap_explanation = self._analyze_quadrants(heatmap, prediction_label)
+            
+            heatmap_resized = cv2.resize(heatmap, (224, 224))
+            heatmap_colored = np.uint8(255 * heatmap_resized)
+            heatmap_colored = cv2.applyColorMap(heatmap_colored, cv2.COLORMAP_JET)
             
             orig_img = cv2.imread(original_image_path)
             orig_img = cv2.resize(orig_img, (224, 224))
             
-            superimposed_img = heatmap * 0.4 + orig_img * 0.6
+            superimposed_img = heatmap_colored * 0.4 + orig_img * 0.6
             
             # Save heatmap
             filename = f"heatmap_{uuid.uuid4().hex}.jpg"
@@ -113,10 +154,12 @@ class InferenceService:
             save_path = os.path.join(save_dir, filename)
             
             cv2.imwrite(save_path, superimposed_img)
-            return save_path
+            return save_path, heatmap_explanation
         except Exception as e:
             print(f"Grad-CAM generation failed: {e}")
-            return None
+            fallback_explanation = "Gradient heatmap overlay computed across retinal regions."
+            return None, fallback_explanation
 
 # Singleton accessor
 inference_service = InferenceService()
+

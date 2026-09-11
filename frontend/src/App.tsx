@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 import Landing from './pages/Landing';
@@ -12,6 +12,7 @@ const SpecialistDashboard = () => <div className="p-8"><h1>Specialist Dashboard<
 
 const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
   
   if (loading) {
     return (
@@ -23,8 +24,14 @@ const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode,
       </div>
     );
   }
-  if (!user) return <Navigate to="/login" replace />;
-  if (!allowedRoles.includes(user.role)) return <Navigate to="/" replace />;
+  
+  if (!user) {
+    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />;
+  }
+  
+  if (!allowedRoles.includes(user.role)) {
+    return <Navigate to="/" replace />;
+  }
   
   return <>{children}</>;
 };
@@ -32,12 +39,31 @@ const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode,
 const AppRoutes = () => {
   return (
     <Routes>
+      {/* Public Pages */}
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/set-password" element={<SetPassword />} />
-      <Route path="/patient/*" element={<ProtectedRoute allowedRoles={['PATIENT']}><PatientDashboard /></ProtectedRoute>} />
-      <Route path="/worker/*" element={<ProtectedRoute allowedRoles={['HEALTHCARE_WORKER', 'ADMIN']}><WorkerDashboard /></ProtectedRoute>} />
+
+      {/* Doctor / Healthcare Worker Distinct Page Endpoints */}
+      <Route path="/worker" element={<Navigate to="/worker/dashboard" replace />} />
+      <Route path="/worker/dashboard" element={<ProtectedRoute allowedRoles={['HEALTHCARE_WORKER', 'ADMIN']}><WorkerDashboard /></ProtectedRoute>} />
+      <Route path="/worker/screen" element={<ProtectedRoute allowedRoles={['HEALTHCARE_WORKER', 'ADMIN']}><WorkerDashboard /></ProtectedRoute>} />
+      <Route path="/worker/queue" element={<ProtectedRoute allowedRoles={['HEALTHCARE_WORKER', 'ADMIN']}><WorkerDashboard /></ProtectedRoute>} />
+      <Route path="/worker/patients" element={<ProtectedRoute allowedRoles={['HEALTHCARE_WORKER', 'ADMIN']}><WorkerDashboard /></ProtectedRoute>} />
+      <Route path="/worker/patients/:patientId" element={<ProtectedRoute allowedRoles={['HEALTHCARE_WORKER', 'ADMIN']}><WorkerDashboard /></ProtectedRoute>} />
+      <Route path="/worker/new-patient" element={<ProtectedRoute allowedRoles={['HEALTHCARE_WORKER', 'ADMIN']}><WorkerDashboard /></ProtectedRoute>} />
+
+      {/* Patient Distinct Page Endpoints */}
+      <Route path="/patient" element={<Navigate to="/patient/dashboard" replace />} />
+      <Route path="/patient/dashboard" element={<ProtectedRoute allowedRoles={['PATIENT']}><PatientDashboard /></ProtectedRoute>} />
+      <Route path="/patient/history" element={<ProtectedRoute allowedRoles={['PATIENT']}><PatientDashboard /></ProtectedRoute>} />
+      <Route path="/patient/chat" element={<ProtectedRoute allowedRoles={['PATIENT']}><PatientDashboard /></ProtectedRoute>} />
+
+      {/* Specialist Route */}
       <Route path="/specialist/*" element={<ProtectedRoute allowedRoles={['SPECIALIST', 'ADMIN']}><SpecialistDashboard /></ProtectedRoute>} />
+
+      {/* Catch-all redirect to Home */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };

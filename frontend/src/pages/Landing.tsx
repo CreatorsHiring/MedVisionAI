@@ -1,8 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { ShieldCheck, Activity, Eye, FileText, Lock, Users, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 const Landing = () => {
+  const { user } = useAuth();
+  const dashboardLink = user?.role === 'PATIENT' ? '/patient/dashboard' : '/worker/dashboard';
+
   return (
     <div className="min-h-screen flex flex-col bg-[#F8F9FA] text-[#0F172A]">
       
@@ -19,13 +23,22 @@ const Landing = () => {
           </div>
 
           <div className="flex items-center space-x-4">
-            <Link to="/login" className="text-xs font-semibold text-[#475569] hover:text-[#0F172A] transition">
-              Clinical Sign In
-            </Link>
-            <Link to="/login" className="bg-[#0F766E] hover:bg-[#0D9488] text-white px-4 py-2 rounded-md text-xs font-semibold transition shadow-sm flex items-center gap-1.5">
-              <span>Open Workspace</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+            {user ? (
+              <Link to={dashboardLink} className="bg-[#0F766E] hover:bg-[#0D9488] text-white px-4 py-2 rounded-md text-xs font-semibold transition shadow-sm flex items-center gap-1.5">
+                <span>Enter Workspace</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            ) : (
+              <>
+                <Link to="/login" className="text-xs font-semibold text-[#475569] hover:text-[#0F172A] transition">
+                  Clinical Sign In
+                </Link>
+                <Link to="/login" className="bg-[#0F766E] hover:bg-[#0D9488] text-white px-4 py-2 rounded-md text-xs font-semibold transition shadow-sm flex items-center gap-1.5">
+                  <span>Open Workspace</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
