@@ -19,6 +19,10 @@ def ensure_db_migrations():
                 cursor.execute("ALTER TABLE screenings ADD COLUMN ai_context TEXT;")
                 conn.commit()
                 print("Auto-migrated screenings table with ai_context column.")
+            if cols and "reviewed" not in cols:
+                cursor.execute("ALTER TABLE screenings ADD COLUMN reviewed BOOLEAN DEFAULT 0;")
+                conn.commit()
+                print("Auto-migrated screenings table with reviewed column.")
             conn.close()
     except Exception as e:
         print("Migration check note:", e)

@@ -82,6 +82,51 @@ def download_report(
 
     return FileResponse(report.pdf_path, media_type="application/pdf", filename=f"MedVisionAI_Report_{report.screening.screening_id}.pdf")
 
+@router.get("/screening/{screening_id}/download")
+def download_screening_report(
+    screening_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Lookup screening by screening_id string or integer id
+    screening = None
+    if screening_id.isdigit():
+        screening = db.query(Screening).filter(Screening.id == int(screening_id)).first()
+    if not screening:
+        screening = db.query(Screening).filter(Screening.screening_id == screening_id).first()
+        
+    if not screening:
+        raise HTTPException(status_code=404, detail="Screening record not found")
+        
+    patient = db.query(Patient).filter(Patient.id == screening.patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient profile not found")
+        
+    # Authorization check for patients
+    if current_user.role == UserRole.PATIENT:
+        if patient.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to access this report")
+            
+    # Check if report already exists and file is on disk
+    report = db.query(Report).filter(Report.screening_id == screening.id).first()
+    if not report or not report.pdf_path or not os.path.exists(report.pdf_path):
+        # Auto-generate PDF report
+        pdf_path = generate_pdf_report(screening, patient)
+        if not report:
+            report = Report(screening_id=screening.id, pdf_path=pdf_path, is_published=True)
+            db.add(report)
+        else:
+            report.pdf_path = pdf_path
+            report.is_published = True
+        db.commit()
+        db.refresh(report)
+
+    return FileResponse(
+        report.pdf_path,
+        media_type="application/pdf",
+        filename=f"MedVisionAI_Report_{screening.screening_id}.pdf"
+    )
+
 @router.get("/my-reports")
 def get_my_reports(
     db: Session = Depends(get_db),
@@ -106,3 +151,4 @@ def get_my_reports(
             "pdf_path": r.pdf_path
         } for r in reports
     ]
+
