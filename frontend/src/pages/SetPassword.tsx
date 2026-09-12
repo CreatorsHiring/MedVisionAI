@@ -1,142 +1,240 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { api } from '../services/api';
-import { Eye, CheckCircle, XCircle, Lock } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Eye, CheckCircle2, Lock, Mail, Calendar, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
 
 const SetPassword = () => {
   const [searchParams] = useSearchParams();
+  const initialEmail = searchParams.get('email') || '';
   const token = searchParams.get('token') || '';
   const navigate = useNavigate();
+  const { login } = useAuth();
 
-  const [status, setStatus] = useState<'loading' | 'valid' | 'invalid' | 'success'>('loading');
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState(initialEmail);
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!token) { setStatus('invalid'); return; }
-    api.get(`/auth/verify-token/${token}`)
-      .then(res => { setUsername(res.data.username); setStatus('valid'); })
-      .catch(() => setStatus('invalid'));
-  }, [token]);
+  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (password.length < 8) { setError('Password must be at least 8 characters.'); return; }
-    if (password !== confirm) { setError('Passwords do not match.'); return; }
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
 
     setSubmitting(true);
     try {
-      await api.post('/auth/set-password', { token, new_password: password });
-      setStatus('success');
+      if (token) {
+        // Legacy token-based activation fallback
+        await api.post('/auth/set-password', { token, new_password: password });
+        setSuccess(true);
+      } else {
+        // Standard DOB identity verification + activation + auto-login
+        const res = await api.post('/auth/set-patient-password', {
+          email: email.trim(),
+          date_of_birth: dateOfBirth.trim(),
+          new_password: password
+        });
+
+        if (res.data?.access_token) {
+          await login(res.data.access_token);
+          setSuccess(true);
+          setTimeout(() => {
+            navigate('/patient/dashboard', { replace: true });
+          }, 1200);
+        } else {
+          setSuccess(true);
+        }
+      }
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Something went wrong. Please try again.');
+      setError(
+        err.response?.data?.detail || 
+        "We couldn't verify your details — please check with your healthcare provider."
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-[#0F172A] flex items-center justify-center p-4">
-      
-      <div className="max-w-md w-full p-8 rounded-xl border border-[#E2E8F0] bg-white shadow-xs">
-        <div className="flex justify-center mb-6">
-          <div className="w-12 h-12 rounded-xl bg-[#0F172A] flex items-center justify-center shadow-xs">
-            <Eye className="w-6 h-6 text-white" />
+    <div className="min-h-screen bg-[#F8F9FA] text-[#0F172A] flex flex-col justify-between p-4 font-sans antialiased">
+      {/* Top Header */}
+      <header className="max-w-md w-full mx-auto pt-6 flex items-center justify-between">
+        <Link to="/" className="flex items-center gap-2 text-slate-900 group">
+          <div className="w-8 h-8 rounded-lg bg-[#0F766E] flex items-center justify-center shadow-xs">
+            <Eye className="w-4 h-4 text-white" />
           </div>
-        </div>
-        <h2 className="text-xl font-extrabold text-center mb-1 text-[#0F172A]">MedVisionAI Patient Activation</h2>
+          <span className="font-semibold text-sm tracking-tight">MedVision<span className="text-[#0F766E]">AI</span></span>
+        </Link>
+        <Link to="/login" className="text-xs font-medium text-slate-600 hover:text-[#0F766E] transition">
+          Back to Login →
+        </Link>
+      </header>
 
-        {status === 'loading' && (
-          <p className="text-center text-[#64748B] text-xs mt-6">Verifying activation link…</p>
-        )}
-
-        {status === 'invalid' && (
-          <div className="text-center mt-6 space-y-4">
-            <XCircle className="w-12 h-12 text-amber-600 mx-auto" />
-            <p className="font-bold text-base text-[#0F172A]">Activation Link Already Used or Expired</p>
-            <p className="text-xs text-[#64748B] leading-relaxed">
-              If you have already set your password, your account is activated! Click below to log in with your credentials.
-            </p>
+      {/* Main Activation Card */}
+      <div className="max-w-md w-full mx-auto my-8 p-6 sm:p-8 rounded-2xl border border-slate-200/90 bg-white shadow-xs">
+        
+        {success ? (
+          <div className="text-center py-4 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Account Activated!</h2>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Your password has been securely configured. Logging you into your patient records…
+              </p>
+            </div>
             <button
-              onClick={() => navigate('/login')}
-              className="mt-2 bg-[#0F766E] hover:bg-[#0D9488] text-white font-bold px-6 py-3 rounded-lg text-xs transition w-full shadow-xs"
+              onClick={() => navigate('/patient/dashboard', { replace: true })}
+              className="mt-4 w-full bg-[#0F766E] hover:bg-[#0D9488] text-white font-medium px-4 py-2.5 rounded-lg text-xs transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              Go to Portal Login
+              <span>Go to Patient Portal</span>
+              <ArrowRight className="w-4 h-4" />
             </button>
           </div>
-        )}
-
-        {status === 'valid' && (
-          <div className="mt-4">
-            <div className="p-4 rounded-lg border border-[#E2E8F0] bg-[#F8F9FA] mb-6 text-center">
-              <p className="text-xs text-[#64748B] mb-1">Your Portal Username</p>
-              <p className="font-mono font-extrabold text-[#0F766E] text-base">{username}</p>
+        ) : (
+          <div>
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-7 h-7 rounded-lg bg-[#0F766E]/10 border border-[#0F766E]/20 text-[#0F766E] flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <h1 className="text-lg font-bold text-slate-900 tracking-tight">
+                First-Time Patient Activation
+              </h1>
             </div>
-            <p className="text-xs text-[#64748B] mb-6 text-center">
-              Set a strong password to activate your account and view your clinical screening reports.
+            
+            <p className="text-xs text-slate-500 font-normal mb-5 leading-relaxed">
+              Verify your identity using your registered email and date of birth, then choose a password to access your eye screening reports.
             </p>
+
+            {error && (
+              <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <span className="leading-snug">{error}</span>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Email Address */}
               <div>
-                <label className="block text-xs font-semibold mb-1 text-[#475569]">
-                  <Lock className="inline w-3.5 h-3.5 mr-1 text-[#0F766E]" /> New Password
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Registered Email Address <span className="text-red-600">*</span>
                 </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="At least 8 characters"
-                  className="w-full border border-[#CBD5E1] bg-[#F8F9FA] text-[#0F172A] rounded-lg p-2.5 text-xs outline-none focus:border-[#0F766E] focus:bg-white transition"
-                  required
-                />
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="e.g. john.doe@example.com"
+                    required
+                    className="w-full pl-9 pr-3 py-2 bg-[#F8F9FA] border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-[#0F766E] outline-none transition font-normal"
+                  />
+                </div>
               </div>
+
+              {/* Date of Birth Verification */}
               <div>
-                <label className="block text-xs font-semibold mb-1 text-[#475569]">Confirm Password</label>
-                <input
-                  type="password"
-                  value={confirm}
-                  onChange={e => setConfirm(e.target.value)}
-                  placeholder="Re-enter your password"
-                  className="w-full border border-[#CBD5E1] bg-[#F8F9FA] text-[#0F172A] rounded-lg p-2.5 text-xs outline-none focus:border-[#0F766E] focus:bg-white transition"
-                  required
-                />
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Date of Birth <span className="text-red-600">*</span>
+                </label>
+                <div className="relative">
+                  <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="date"
+                    value={dateOfBirth}
+                    onChange={e => setDateOfBirth(e.target.value)}
+                    required
+                    className="w-full pl-9 pr-3 py-2 bg-[#F8F9FA] border border-slate-300 rounded-lg text-xs text-slate-900 focus:bg-white focus:border-[#0F766E] outline-none transition font-normal"
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">Must match the date given during clinic registration.</p>
               </div>
-              {error && <p className="text-xs text-[#9F1239] bg-[#FEF2F2] border border-[#FECDD3] rounded-lg p-3">{error}</p>}
+
+              {/* New Password */}
+              <div className="pt-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Create Password <span className="text-red-600">*</span>
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="Minimum 8 characters"
+                    required
+                    minLength={8}
+                    className="w-full pl-9 pr-3 py-2 bg-[#F8F9FA] border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-[#0F766E] outline-none transition font-normal"
+                  />
+                </div>
+              </div>
+
+              {/* Confirm Password */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Confirm Password <span className="text-red-600">*</span>
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter your password"
+                    required
+                    minLength={8}
+                    className="w-full pl-9 pr-3 py-2 bg-[#F8F9FA] border border-slate-300 rounded-lg text-xs text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-[#0F766E] outline-none transition font-normal"
+                  />
+                </div>
+              </div>
+
+              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full bg-[#0F766E] hover:bg-[#0D9488] disabled:opacity-40 text-white font-bold p-3 rounded-lg text-xs transition shadow-xs"
+                className="w-full mt-2 bg-[#0F766E] hover:bg-[#0D9488] disabled:opacity-50 text-white font-medium py-2.5 rounded-lg text-xs shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                {submitting ? 'Activating…' : 'Set Password & Activate Account'}
+                {submitting ? (
+                  <span>Verifying & Setting Password…</span>
+                ) : (
+                  <>
+                    <span>Activate Account & Log In</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </form>
-          </div>
-        )}
 
-        {status === 'success' && (
-          <div className="text-center mt-6 space-y-4">
-            <CheckCircle className="w-14 h-14 text-[#047857] mx-auto tick-anim-box" />
-            <p className="font-extrabold text-base text-[#0F172A]">Account Activated!</p>
-            <p className="text-xs text-[#64748B]">
-              Your username is <span className="font-mono font-bold text-[#0F766E]">{username}</span>. 
-              You can now log in to view your screening results.
-            </p>
-            <button
-              onClick={() => navigate('/login')}
-              className="mt-4 bg-[#0F766E] hover:bg-[#0D9488] text-white px-8 py-3 rounded-lg font-bold text-xs w-full shadow-xs transition"
-            >
-              Go to Portal Login
-            </button>
+            <div className="mt-5 pt-4 border-t border-slate-100 text-center">
+              <p className="text-[11px] text-slate-500">
+                Already have an active password?{' '}
+                <Link to="/login" className="text-[#0F766E] hover:underline font-semibold">
+                  Sign in here
+                </Link>
+              </p>
+            </div>
           </div>
         )}
       </div>
+
+      {/* Footer */}
+      <footer className="text-center text-[11px] text-slate-400 py-3">
+        MedVisionAI • Clinical Diabetic Retinopathy Diagnostic Platform
+      </footer>
     </div>
   );
 };
 
 export default SetPassword;
-
-

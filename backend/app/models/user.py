@@ -16,6 +16,7 @@ class User(Base):
     hashed_password = Column(String, nullable=True)  # NULL until patient sets password
     role = Column(Enum(UserRole), default=UserRole.PATIENT)
     is_active = Column(Boolean, default=True)
+    is_activated = Column(Boolean, default=False)
     require_password_change = Column(Boolean, default=False)
     reset_token = Column(String, unique=True, nullable=True, index=True)
     reset_token_expires = Column(DateTime, nullable=True)
