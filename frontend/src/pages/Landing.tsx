@@ -9,7 +9,7 @@ import FoldText from '../components/FoldText';
 import { 
   Eye, FileText, Users, ArrowRight, 
   Activity, ShieldCheck, Lock, 
-  Check 
+  Check, RotateCcw
 } from 'lucide-react';
 
 const CLINICAL_GALLERY_ITEMS: AccordionGalleryItem[] = [
@@ -40,7 +40,127 @@ const CLINICAL_GALLERY_ITEMS: AccordionGalleryItem[] = [
   }
 ];
 
+const RedPaintRollCounter: React.FC = () => {
+  const [count, setCount] = useState<number>(0);
+  const [isAnimating, setIsAnimating] = useState<boolean>(true);
+  const target = 3900000; // 3.9 Million
+
+  const startAnimation = useCallback(() => {
+    setCount(0);
+    setIsAnimating(true);
+    let startTimestamp: number | null = null;
+    const duration = 3000; // 3.0s count up animation
+
+    const step = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      // Easing function: easeOutCubic
+      const ease = 1 - Math.pow(1 - progress, 3);
+      const current = Math.floor(ease * target);
+      setCount(current);
+
+      if (progress < 1) {
+        window.requestAnimationFrame(step);
+      } else {
+        setCount(target);
+        setIsAnimating(false);
+      }
+    };
+
+    window.requestAnimationFrame(step);
+  }, [target]);
+
+  useEffect(() => {
+    startAnimation();
+  }, [startAnimation]);
+
+  const formattedString = count.toLocaleString('en-US');
+  const charArray = formattedString.split('');
+  const digitsDesc = [9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
+
+  return (
+    <div className="relative my-8 max-w-3xl">
+      {/* Non-neon, Matte Deep Red Paint Card Container */}
+      <div className="relative bg-[#9E1B1B] text-white p-6 sm:p-8 rounded-xl border border-red-800/80 overflow-hidden shadow-md">
+        
+        {/* Subtle Matte Paint Texture Overlay */}
+        <div className="absolute inset-0 pointer-events-none opacity-20">
+          <svg className="w-full h-full" viewBox="0 0 500 150" preserveAspectRatio="none">
+            <path d="M 0 0 C 140 15 360 -10 500 10 L 500 150 C 340 135 160 160 0 140 Z" fill="#701212" />
+          </svg>
+        </div>
+
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          
+          {/* Animated Counter Display: 0 -> 3,900,000+ */}
+          <div className="flex flex-col items-start">
+            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-black/30 text-rose-100 text-[11px] font-mono font-semibold uppercase tracking-wider mb-2 border border-white/10">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-300"></span>
+              // AFFECTED POPULATION
+            </div>
+
+            {/* Rolling Top-to-Down Number Strip */}
+            <div className="flex items-baseline font-black tracking-tight text-3xl sm:text-5xl font-mono text-white">
+              {charArray.map((char, idx) => {
+                if (char === ',') {
+                  return (
+                    <span key={`comma-${idx}`} className="text-amber-300 font-extrabold px-0.5 text-3xl sm:text-5xl">
+                      ,
+                    </span>
+                  );
+                }
+                const digitNum = parseInt(char, 10);
+                return (
+                  <div key={`digit-${idx}`} className="h-10 sm:h-14 overflow-hidden relative inline-block">
+                    <div 
+                      className="transition-transform duration-100 ease-out flex flex-col items-center"
+                      style={{ transform: `translateY(-${(9 - digitNum) * 10}%)` }}
+                    >
+                      {digitsDesc.map((digit) => (
+                        <span 
+                          key={digit} 
+                          className="h-10 sm:h-14 flex items-center justify-center font-black text-white drop-shadow-xs px-[1px]"
+                        >
+                          {digit}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              <span className="text-amber-300 ml-1 font-black text-3xl sm:text-5xl">+</span>
+            </div>
+
+            {/* Replay Roll Button */}
+            <button
+              onClick={startAnimation}
+              disabled={isAnimating}
+              className="mt-3 inline-flex items-center gap-1.5 text-xs text-rose-100 hover:text-white transition-colors bg-black/25 hover:bg-black/40 px-3 py-1 rounded-md border border-white/15"
+            >
+              <RotateCcw className={`w-3 h-3 ${isAnimating ? 'animate-spin' : ''}`} />
+              <span>{isAnimating ? 'Counting...' : 'Replay Roll'}</span>
+            </button>
+          </div>
+
+          {/* Context Text */}
+          <div className="text-left space-y-2 flex-1 border-t md:border-t-0 md:border-l border-white/20 pt-4 md:pt-0 md:pl-6">
+            <h3 className="text-lg sm:text-xl font-bold text-white leading-snug">
+              People Affected by Diabetic Retinopathy Worldwide
+            </h3>
+            <p className="text-xs sm:text-sm text-rose-100/90 leading-relaxed font-normal">
+              Yet the vast majority of vision loss is completely preventable with timely detection. The primary bottleneck is access to early diagnostic evaluation.
+            </p>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
 const NAV_ITEMS = [
+
   { id: 'problem', label: '// THE PROBLEM' },
   { id: 'gap', label: '// THE GAP' },
   { id: 'process', label: '// THE PROCESS' },
@@ -287,15 +407,16 @@ const Landing = () => {
               </span>
             </h1>
 
+            {/* Red Paint Brush Statistic Component */}
+            <RedPaintRollCounter />
+
             {/* Real-World Context Paragraph */}
-            <div className="space-y-4 text-base sm:text-lg text-slate-600 font-normal leading-relaxed max-w-3xl pt-2">
-              <p>
-                Over <strong className="text-slate-900 font-semibold">100 million people worldwide</strong> live with diabetic retinopathy, yet the vast majority of vision loss is completely preventable with timely detection. The bottleneck is not treatment — it is access to early diagnostic evaluation.
-              </p>
-              <p className="text-sm sm:text-base text-slate-500 leading-relaxed border-l-2 border-teal-500/40 pl-4 py-0.5">
+            <div className="space-y-4 text-base sm:text-lg text-slate-600 font-normal leading-relaxed max-w-3xl">
+              <p className="text-sm sm:text-base text-slate-500 leading-relaxed border-l-2 border-red-500/40 pl-4 py-0.5">
                 Standard screening requires dilated fundus examinations by specialized ophthalmologists using expensive hospital-grade equipment that community health centers and primary care clinics rarely possess. As a consequence, early microvascular lesions routinely go unnoticed until irreversible vision impairment is already underway.
               </p>
             </div>
+
 
           </div>
         </section>
