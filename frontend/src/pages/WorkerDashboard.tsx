@@ -536,11 +536,9 @@ const WorkerDashboard = () => {
           
           {/* Brand Logo */}
           <Link to="/worker/dashboard" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-lg bg-[#0F766E] text-white flex items-center justify-center shadow-xs">
-              <Eye className="w-4 h-4 text-white" />
-            </div>
+            <img src="/logo.png" alt="MedVisionAI Logo" className="w-8 h-8 object-contain group-hover:scale-105 transition-transform" />
             <div className="hidden sm:block">
-              <span className="font-semibold text-sm tracking-tight text-slate-900">MedVision<span className="text-[#0F766E]">AI</span></span>
+              <span className="font-semibold text-sm tracking-tight text-slate-900 font-mono">MedVision<span className="text-[#0F766E]">AI</span></span>
             </div>
           </Link>
 
@@ -1966,7 +1964,7 @@ const WorkerDashboard = () => {
                       className="w-full border border-slate-300 bg-[#F8F9FA] text-slate-900 rounded-lg p-2 text-xs outline-none focus:border-[#0F766E] focus:bg-white transition font-normal" 
                       required 
                     />
-                    <p className="text-[10px] text-slate-400 mt-0.5">Used as primary login username.</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Used as primary login email.</p>
                   </div>
 
                   <div>
