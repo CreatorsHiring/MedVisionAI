@@ -50,7 +50,12 @@ const Login = () => {
         navigate('/worker/dashboard', { replace: true });
       }
     } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || 'Invalid username or password. Please try again.');
+      const detail = err.response?.data?.detail;
+      if (err.response?.status === 403 && detail === 'ACCOUNT_PENDING_ACTIVATION') {
+        navigate(`/set-password?email=${encodeURIComponent(username.trim())}`);
+        return;
+      }
+      setError(detail || err.message || 'Invalid username or password. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -166,7 +171,7 @@ const Login = () => {
             <form onSubmit={handleSubmit} className="cream-login-form">
               <div className="form-row-group">
                 <div className="form-field">
-                  <label>{mode === 'doctor' ? 'Doctor / Admin Username' : 'Patient Username'}</label>
+                  <label>{mode === 'doctor' ? 'Doctor / Admin Username' : 'Patient Email / Username'}</label>
                   <div className="field-input-box">
                     <User className="w-4 h-4 field-icon" />
                     <input
@@ -174,7 +179,7 @@ const Login = () => {
                       className="field-input"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      placeholder={mode === 'doctor' ? 'e.g. dr.screening or medvision.admin' : 'Enter patient username'}
+                      placeholder={mode === 'doctor' ? 'e.g. dr.screening or medvision.admin' : 'e.g. patient@example.com'}
                       required
                     />
                   </div>
@@ -205,10 +210,20 @@ const Login = () => {
               </div>
             </form>
 
-            <div className="cream-hint">
-              {mode === 'doctor'
-                ? '🔒 Admin credentials (`medvision.admin`) provide complete system access & Excel data export.'
-                : '🔑 Patients sign in using credentials sent to their email.'}
+            <div className="cream-hint flex flex-col gap-2">
+              {mode === 'doctor' ? (
+                <div>🔒 Admin credentials (`medvision.admin`) provide complete system access & Excel data export.</div>
+              ) : (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                  <span>🔑 Use your registered email address to sign in.</span>
+                  <Link 
+                    to={username.trim() ? `/set-password?email=${encodeURIComponent(username.trim())}` : "/set-password"} 
+                    className="text-[#0F766E] hover:underline font-semibold shrink-0"
+                  >
+                    First time logging in? Set your password →
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
 

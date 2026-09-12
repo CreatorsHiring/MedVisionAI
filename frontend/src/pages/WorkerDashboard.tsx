@@ -6,7 +6,7 @@ import {
   Upload, Eye, FileText, UserPlus, Users, AlertTriangle, CheckCircle, 
   Trash2, Download, LogOut, Activity, Sparkles, Clock,
   ShieldAlert, RefreshCw, ChevronRight, Layers,
-  Check, ShieldCheck, X, ExternalLink
+  Check, ShieldCheck, X, ExternalLink, Copy, AlertCircle
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -27,6 +27,9 @@ interface Patient {
   patient_access_id: string; 
   email: string; 
   username: string; 
+  account_status?: string;
+  date_of_birth?: string;
+  diabetes_type?: string;
 }
 
 interface ScreeningResult { 
@@ -168,8 +171,20 @@ const WorkerDashboard = () => {
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   // New patient form state
-  const [newPatient, setNewPatient] = useState({ first_name: '', last_name: '', email: '', phone: '' });
+  const [newPatient, setNewPatient] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    date_of_birth: '',
+    diabetes_type: 'Type 2',
+    year_of_diagnosis: '',
+    existing_eye_conditions: ''
+  });
   const [createdPatient, setCreatedPatient] = useState<any>(null);
+  const [registerError, setRegisterError] = useState('');
+  const [submittingPatient, setSubmittingPatient] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetchPatients();
@@ -366,15 +381,46 @@ const WorkerDashboard = () => {
 
   const handleCreatePatient = async (e: React.FormEvent) => {
     e.preventDefault();
+    setRegisterError('');
+    setSubmittingPatient(true);
     try {
-      const res = await api.post('/patients/', newPatient);
+      const payload: any = {
+        first_name: newPatient.first_name.trim(),
+        last_name: newPatient.last_name.trim(),
+        email: newPatient.email.trim(),
+        phone: newPatient.phone.trim() || undefined,
+        date_of_birth: newPatient.date_of_birth.trim(),
+        diabetes_type: newPatient.diabetes_type,
+        year_of_diagnosis: newPatient.year_of_diagnosis ? parseInt(newPatient.year_of_diagnosis, 10) : undefined,
+        existing_eye_conditions: newPatient.existing_eye_conditions.trim() || undefined,
+      };
+
+      const res = await api.post('/patients/', payload);
       setCreatedPatient(res.data);
       fetchPatients();
       fetchStats();
-      setNewPatient({ first_name: '', last_name: '', email: '', phone: '' });
+      setNewPatient({
+        first_name: '',
+        last_name: '',
+        email: '',
+        phone: '',
+        date_of_birth: '',
+        diabetes_type: 'Type 2',
+        year_of_diagnosis: '',
+        existing_eye_conditions: ''
+      });
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to create patient.');
+      setRegisterError(err.response?.data?.detail || 'Failed to register patient.');
+    } finally {
+      setSubmittingPatient(false);
     }
+  };
+
+  const handleCopyDetails = (patient: any) => {
+    const text = `MedVisionAI Patient Portal Login Details:\nPatient ID: ${patient.patient_access_id}\nEmail: ${patient.email}\nPortal URL: ${window.location.origin}/login\n\nInstructions: Go to the Patient Portal, enter your email and click "Set your password". Verify your Date of Birth (${patient.date_of_birth || 'on record'}) to activate your account.`;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
   };
 
   const handleDeletePatient = async (id: number, name: string) => {
@@ -1624,7 +1670,7 @@ const WorkerDashboard = () => {
                 <table className="min-w-full divide-y divide-slate-200">
                   <thead className="bg-[#F8F9FA]">
                     <tr>
-                      {['Patient ID', 'Full Name', 'Username', 'Email', 'Screening History', 'Actions'].map(h => (
+                      {['Patient ID', 'Full Name', 'Account Status', 'Email', 'Screening History', 'Actions'].map(h => (
                         <th key={h} className="px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-slate-500">{h}</th>
                       ))}
                     </tr>
@@ -1645,7 +1691,16 @@ const WorkerDashboard = () => {
                       >
                         <td className="px-4 py-3 font-mono text-slate-600 font-medium">{p.patient_access_id}</td>
                         <td className="px-4 py-3 font-medium text-slate-900">{p.name}</td>
-                        <td className="px-4 py-3 text-slate-500 font-normal">{p.username}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2.5 py-1 rounded-md text-[11px] font-medium border inline-flex items-center gap-1.5 ${
+                            p.account_status === 'Active'
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                              : 'bg-amber-50 border-amber-200 text-amber-700'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${p.account_status === 'Active' ? 'bg-emerald-600' : 'bg-amber-500'}`}></span>
+                            {p.account_status || 'Pending Activation'}
+                          </span>
+                        </td>
                         <td className="px-4 py-3 text-slate-500 font-normal">{p.email || '—'}</td>
                         <td className="px-4 py-3">
                           <button
@@ -1768,90 +1823,242 @@ const WorkerDashboard = () => {
         {/* TAB 4: REGISTER NEW PATIENT (/worker/new-patient) */}
         {/* ========================================================================= */}
         {currentTab === 'new-patient' && (
-          <div key="new-patient" className="page-transition-enter p-5 rounded-xl border border-slate-200/80 bg-white shadow-xs max-w-lg mx-auto">
+          <div key="new-patient" className="page-transition-enter p-6 rounded-xl border border-slate-200/80 bg-white shadow-xs max-w-xl mx-auto">
             <h2 className="text-sm font-semibold mb-4 flex items-center gap-2 text-slate-900 pb-3 border-b border-slate-100">
-              <UserPlus className="w-4 h-4 text-[#0F766E]" /> Register Patient Profile
+              <UserPlus className="w-4 h-4 text-[#0F766E]" /> Register Patient Profile & Clinical Biodata
             </h2>
 
             {createdPatient ? (
-              <div className="bg-emerald-50/50 border border-emerald-200 rounded-lg p-5 text-center space-y-3">
-                <CheckCircle className="w-8 h-8 text-emerald-600 mx-auto" />
-                <p className="font-semibold text-emerald-800 text-sm">Patient account created successfully</p>
-                <div className="text-xs space-y-1.5 font-mono rounded-lg p-3 text-left border bg-white border-emerald-200 text-slate-800">
-                  <p><span className="font-normal text-slate-500">Patient ID:</span> {createdPatient.patient_access_id}</p>
-                  <p><span className="font-normal text-slate-500">Username:</span> {createdPatient.username}</p>
-                  <p><span className="font-normal text-slate-500">Email:</span> {createdPatient.email}</p>
-                  {createdPatient.set_password_link && (
-                    <p className="pt-1.5 text-xs font-sans break-all">
-                      <span className="font-medium text-slate-900">Activation Link:</span>{' '}
-                      <a href={createdPatient.set_password_link} target="_blank" rel="noreferrer" className="text-[#0F766E] underline font-medium">
-                        {createdPatient.set_password_link}
-                      </a>
-                    </p>
-                  )}
+              <div className="bg-emerald-50/50 border border-emerald-200 rounded-xl p-6 text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto shadow-2xs">
+                  <CheckCircle className="w-6 h-6" />
                 </div>
-                <button 
-                  onClick={() => { 
-                    setSelectedPatientId(String(createdPatient.patient_id));
-                    setCreatedPatient(null); 
-                    navigate('/worker/screen'); 
-                  }}
-                  className="mt-2 bg-[#0F766E] hover:bg-[#0D9488] text-white px-5 py-2 rounded-lg text-xs font-medium shadow-xs transition cursor-pointer"
-                >
-                  Initiate Retinal Screening →
-                </button>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Patient Registered Successfully</h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    A linked patient portal account has been prepared for self-activation.
+                  </p>
+                </div>
+
+                {/* Account Details Box */}
+                <div className="text-xs space-y-2 rounded-lg p-4 text-left border bg-white border-emerald-200 text-slate-800 shadow-2xs">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <span className="text-slate-500 font-medium">Patient ID:</span>
+                    <span className="font-mono font-bold text-slate-900 text-sm">{createdPatient.patient_access_id}</span>
+                  </div>
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <span className="text-slate-500 font-medium">Patient Name:</span>
+                    <span className="font-medium text-slate-900">{createdPatient.name}</span>
+                  </div>
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <span className="text-slate-500 font-medium">Login Identifier (Email):</span>
+                    <span className="font-mono font-medium text-[#0F766E]">{createdPatient.email}</span>
+                  </div>
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <span className="text-slate-500 font-medium">Date of Birth:</span>
+                    <span className="font-medium text-slate-800">{createdPatient.date_of_birth}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 font-medium">Account Status:</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                      Pending Activation
+                    </span>
+                  </div>
+                </div>
+
+                {/* Share Notice */}
+                <div className="p-3 bg-teal-50/70 border border-teal-200/80 rounded-lg text-xs text-teal-900 text-left flex items-start gap-2">
+                  <ShieldCheck className="w-4 h-4 text-[#0F766E] shrink-0 mt-0.5" />
+                  <p className="leading-relaxed">
+                    <strong>Share these login details with the patient.</strong> They will set their own secure password using their email and Date of Birth verification the first time they log in.
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyDetails(createdPatient)}
+                    className="w-full sm:w-1/2 flex items-center justify-center gap-1.5 bg-white border border-slate-300 hover:border-slate-400 text-slate-700 py-2.5 rounded-lg text-xs font-medium transition shadow-2xs cursor-pointer"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-emerald-700 font-semibold">Details Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Copy details</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button 
+                    onClick={() => { 
+                      setSelectedPatientId(String(createdPatient.patient_id));
+                      setCreatedPatient(null); 
+                      navigate('/worker/screen'); 
+                    }}
+                    className="w-full sm:w-1/2 bg-[#0F766E] hover:bg-[#0D9488] text-white py-2.5 rounded-lg text-xs font-medium shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <span>Proceed to Screening →</span>
+                  </button>
+                </div>
+
+                <div className="pt-1">
+                  <button
+                    onClick={() => { setCreatedPatient(null); setRegisterError(''); }}
+                    className="text-xs text-slate-500 hover:text-slate-800 underline cursor-pointer"
+                  >
+                    Register another patient
+                  </button>
+                </div>
               </div>
             ) : (
-              <form onSubmit={handleCreatePatient} className="space-y-3.5">
-                <div className="grid grid-cols-2 gap-3.5">
+              <form onSubmit={handleCreatePatient} className="space-y-4">
+                {registerError && (
+                  <div className="p-3.5 rounded-lg bg-red-50 border border-red-200 text-red-800 text-xs flex items-start gap-2 animate-in fade-in duration-150">
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                    <span className="leading-relaxed font-medium">{registerError}</span>
+                  </div>
+                )}
+
+                {/* Name Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="block text-xs font-medium mb-1 text-slate-700">First Name</label>
+                    <label className="block text-xs font-semibold mb-1 text-slate-700">
+                      First Name <span className="text-red-600">*</span>
+                    </label>
                     <input 
                       value={newPatient.first_name} 
                       onChange={e => setNewPatient({ ...newPatient, first_name: e.target.value })}
+                      placeholder="e.g. John"
                       className="w-full border border-slate-300 bg-[#F8F9FA] text-slate-900 rounded-lg p-2 text-xs outline-none focus:border-[#0F766E] focus:bg-white transition font-normal" 
                       required 
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium mb-1 text-slate-700">Last Name</label>
+                    <label className="block text-xs font-semibold mb-1 text-slate-700">
+                      Last Name <span className="text-red-600">*</span>
+                    </label>
                     <input 
                       value={newPatient.last_name} 
                       onChange={e => setNewPatient({ ...newPatient, last_name: e.target.value })}
+                      placeholder="e.g. Doe"
                       className="w-full border border-slate-300 bg-[#F8F9FA] text-slate-900 rounded-lg p-2 text-xs outline-none focus:border-[#0F766E] focus:bg-white transition font-normal" 
                       required 
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium mb-1 text-slate-700">
-                    Email Address <span className="text-red-600">*</span>
-                  </label>
-                  <input 
-                    type="email" 
-                    value={newPatient.email} 
-                    onChange={e => setNewPatient({ ...newPatient, email: e.target.value })}
-                    className="w-full border border-slate-300 bg-[#F8F9FA] text-slate-900 rounded-lg p-2 text-xs outline-none focus:border-[#0F766E] focus:bg-white transition font-normal" 
-                    required 
-                  />
+                {/* Contact Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="block text-xs font-semibold mb-1 text-slate-700">
+                      Email Address <span className="text-red-600">*</span>
+                    </label>
+                    <input 
+                      type="email" 
+                      value={newPatient.email} 
+                      onChange={e => setNewPatient({ ...newPatient, email: e.target.value })}
+                      placeholder="e.g. patient@example.com"
+                      className="w-full border border-slate-300 bg-[#F8F9FA] text-slate-900 rounded-lg p-2 text-xs outline-none focus:border-[#0F766E] focus:bg-white transition font-normal" 
+                      required 
+                    />
+                    <p className="text-[10px] text-slate-400 mt-0.5">Used as primary login username.</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold mb-1 text-slate-700">Phone Number (Optional)</label>
+                    <input 
+                      type="tel" 
+                      value={newPatient.phone} 
+                      onChange={e => setNewPatient({ ...newPatient, phone: e.target.value })}
+                      placeholder="e.g. +1 555-0199"
+                      className="w-full border border-slate-300 bg-[#F8F9FA] text-slate-900 rounded-lg p-2 text-xs outline-none focus:border-[#0F766E] focus:bg-white transition font-normal" 
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium mb-1 text-slate-700">Phone Number (Optional)</label>
-                  <input 
-                    type="tel" 
-                    value={newPatient.phone} 
-                    onChange={e => setNewPatient({ ...newPatient, phone: e.target.value })}
-                    className="w-full border border-slate-300 bg-[#F8F9FA] text-slate-900 rounded-lg p-2 text-xs outline-none focus:border-[#0F766E] focus:bg-white transition font-normal" 
-                  />
+                {/* Clinical Eye Care Biodata */}
+                <div className="pt-2 border-t border-slate-100 space-y-3.5">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Clinical Biodata for Retinal Care
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-slate-700">
+                        Date of Birth <span className="text-red-600">*</span>
+                      </label>
+                      <input 
+                        type="date"
+                        value={newPatient.date_of_birth} 
+                        onChange={e => setNewPatient({ ...newPatient, date_of_birth: e.target.value })}
+                        className="w-full border border-slate-300 bg-[#F8F9FA] text-slate-900 rounded-lg p-2 text-xs outline-none focus:border-[#0F766E] focus:bg-white transition font-normal" 
+                        required 
+                      />
+                      <p className="text-[10px] text-slate-400 mt-0.5">Used for patient identity verification.</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-slate-700">
+                        Diabetes Type <span className="text-red-600">*</span>
+                      </label>
+                      <select
+                        value={newPatient.diabetes_type}
+                        onChange={e => setNewPatient({ ...newPatient, diabetes_type: e.target.value })}
+                        className="w-full border border-slate-300 bg-[#F8F9FA] text-slate-900 rounded-lg p-2 text-xs outline-none focus:border-[#0F766E] focus:bg-white transition font-normal cursor-pointer"
+                        required
+                      >
+                        <option value="Type 2">Type 2</option>
+                        <option value="Type 1">Type 1</option>
+                        <option value="Gestational">Gestational</option>
+                        <option value="Pre-diabetic">Pre-diabetic</option>
+                        <option value="Not diabetic">Not diabetic</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-slate-700">
+                        Year of Diagnosis <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input 
+                        type="number"
+                        min="1950"
+                        max="2026"
+                        value={newPatient.year_of_diagnosis} 
+                        onChange={e => setNewPatient({ ...newPatient, year_of_diagnosis: e.target.value })}
+                        placeholder="e.g. 2018"
+                        className="w-full border border-slate-300 bg-[#F8F9FA] text-slate-900 rounded-lg p-2 text-xs outline-none focus:border-[#0F766E] focus:bg-white transition font-normal" 
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold mb-1 text-slate-700">
+                        Existing Eye Conditions <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input 
+                        type="text"
+                        value={newPatient.existing_eye_conditions} 
+                        onChange={e => setNewPatient({ ...newPatient, existing_eye_conditions: e.target.value })}
+                        placeholder="e.g. Cataracts, Glaucoma"
+                        className="w-full border border-slate-300 bg-[#F8F9FA] text-slate-900 rounded-lg p-2 text-xs outline-none focus:border-[#0F766E] focus:bg-white transition font-normal" 
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <button 
                   type="submit" 
-                  className="w-full bg-[#0F766E] hover:bg-[#0D9488] text-white py-2.5 rounded-lg font-medium text-xs shadow-xs transition cursor-pointer"
+                  disabled={submittingPatient}
+                  className="w-full mt-2 bg-[#0F766E] hover:bg-[#0D9488] disabled:opacity-50 text-white py-2.5 rounded-lg font-medium text-xs shadow-xs transition cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  Create Patient & Send Activation Email
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>{submittingPatient ? 'Registering Patient…' : 'Register Patient'}</span>
                 </button>
               </form>
             )}

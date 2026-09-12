@@ -1,41 +1,27 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from pydantic import BaseModel
 from typing import Optional
 from app.database.session import get_db
 from app.models.user import User, UserRole
 from app.models.patient import Patient
 from app.auth.deps import require_role
-from app.auth.security import get_password_hash
-from app.notifications.email import send_welcome_email
 from app.core.config import settings
 import uuid
-import secrets
-import re
-from datetime import datetime, timedelta
+from datetime import datetime, date
 
 router = APIRouter()
 
 class CreatePatientRequest(BaseModel):
     first_name: str
     last_name: str
-    email: str  # Required for welcome email
+    email: str  # Required, used as login identifier
     phone: Optional[str] = None
-
-
-def _generate_username(first_name: str, last_name: str, db: Session) -> str:
-    """Generate a unique username like john.doe_k3m9"""
-    base = f"{first_name.lower()}.{last_name.lower()}"
-    # Remove any non-alphanumeric chars except dot
-    base = re.sub(r"[^a-z0-9.]", "", base)
-    # Try base first, then add random suffix until unique
-    for _ in range(10):
-        suffix = secrets.token_hex(2)  # 4 random hex chars e.g. 'a3f2'
-        candidate = f"{base}_{suffix}"
-        if not db.query(User).filter(User.username == candidate).first():
-            return candidate
-    # Ultimate fallback
-    return f"{base}_{uuid.uuid4().hex[:6]}"
+    date_of_birth: str  # YYYY-MM-DD
+    diabetes_type: str  # "Type 1", "Type 2", "Gestational", "Pre-diabetic", "Not diabetic"
+    year_of_diagnosis: Optional[int] = None
+    existing_eye_conditions: Optional[str] = None
 
 
 @router.post("/", status_code=201)
@@ -44,52 +30,85 @@ def create_patient(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role([UserRole.HEALTHCARE_WORKER, UserRole.ADMIN]))
 ):
-    # Auto-generate username from patient name
-    username = _generate_username(data.first_name, data.last_name, db)
+    email_clean = data.email.lower().strip()
+    if not email_clean:
+        raise HTTPException(status_code=400, detail="Email address is required.")
 
-    # Generate a secure one-time password-reset token (48h expiry)
-    reset_token = secrets.token_urlsafe(32)
-    token_expires = datetime.utcnow() + timedelta(hours=48)
+    # Duplicate check on email
+    existing_patient = db.query(Patient).filter(func.lower(Patient.email) == email_clean).first()
+    if existing_patient:
+        raise HTTPException(
+            status_code=400,
+            detail=f"A patient with this email already exists (Patient ID: {existing_patient.patient_access_id})."
+        )
 
-    # Create user account – NO password yet, patient sets it themselves
+    existing_user = db.query(User).filter(func.lower(User.username) == email_clean).first()
+    if existing_user:
+        linked_patient = db.query(Patient).filter(Patient.user_id == existing_user.id).first()
+        pat_id_str = f" (Patient ID: {linked_patient.patient_access_id})" if linked_patient else ""
+        raise HTTPException(
+            status_code=400,
+            detail=f"A patient with this email already exists{pat_id_str}."
+        )
+
+    # Parse date_of_birth
+    dob_obj = None
+    if data.date_of_birth:
+        try:
+            dob_obj = datetime.strptime(data.date_of_birth.strip(), "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid Date of Birth format. Please use YYYY-MM-DD.")
+    else:
+        raise HTTPException(status_code=400, detail="Date of Birth is required for patient verification.")
+
+    # Create linked user account with hashed_password = NULL and is_activated = False
     user = User(
-        username=username,
+        username=email_clean,
         hashed_password=None,
         role=UserRole.PATIENT,
-        reset_token=reset_token,
-        reset_token_expires=token_expires,
+        is_active=True,
+        is_activated=False,
         require_password_change=True,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    # Create patient profile
+    # Create patient profile with full clinical biodata
     patient_access_id = f"MV-PAT-{uuid.uuid4().hex[:6].upper()}"
     patient = Patient(
         user_id=user.id,
         patient_access_id=patient_access_id,
-        first_name=data.first_name,
-        last_name=data.last_name,
-        email=data.email,
-        phone=data.phone,
+        first_name=data.first_name.strip(),
+        last_name=data.last_name.strip(),
+        date_of_birth=dob_obj,
+        diabetes_type=data.diabetes_type.strip() if data.diabetes_type else "Not diabetic",
+        year_of_diagnosis=data.year_of_diagnosis,
+        existing_eye_conditions=data.existing_eye_conditions.strip() if data.existing_eye_conditions else None,
+        email=email_clean,
+        phone=data.phone.strip() if data.phone else None,
     )
     db.add(patient)
     db.commit()
     db.refresh(patient)
 
-    # Send welcome email with username + set-password link
-    full_name = f"{data.first_name} {data.last_name}"
-    set_password_link = f"{settings.FRONTEND_URL}/set-password?token={reset_token}"
-    send_welcome_email(full_name, data.email, username, set_password_link)
+    # TODO: Automated email delivery hook.
+    # When email infrastructure is provisioned, send a welcome/activation email to patient.email.
+    # For now, login details (email & Patient ID) are handed off out-of-band by the clinician.
 
     return {
         "patient_id": patient.id,
         "patient_access_id": patient_access_id,
-        "username": username,
-        "email": data.email,
-        "set_password_link": set_password_link,
-        "message": f"Patient account created. Welcome email with set-password link sent to {data.email}.",
+        "first_name": patient.first_name,
+        "last_name": patient.last_name,
+        "name": f"{patient.first_name} {patient.last_name}",
+        "email": patient.email,
+        "date_of_birth": str(patient.date_of_birth) if patient.date_of_birth else None,
+        "diabetes_type": patient.diabetes_type,
+        "year_of_diagnosis": patient.year_of_diagnosis,
+        "existing_eye_conditions": patient.existing_eye_conditions,
+        "account_status": "PENDING_ACTIVATION",
+        "message": "Patient registered successfully. Share login details with the patient.",
     }
 
 
@@ -104,8 +123,17 @@ def list_patients(
             "id": p.id,
             "patient_access_id": p.patient_access_id,
             "name": f"{p.first_name} {p.last_name}",
+            "first_name": p.first_name,
+            "last_name": p.last_name,
             "email": p.email,
+            "phone": p.phone,
+            "date_of_birth": str(p.date_of_birth) if p.date_of_birth else None,
+            "diabetes_type": p.diabetes_type,
+            "year_of_diagnosis": p.year_of_diagnosis,
+            "existing_eye_conditions": p.existing_eye_conditions,
             "username": p.user.username if p.user else None,
+            "is_activated": (p.user.hashed_password is not None and getattr(p.user, 'is_activated', True)) if p.user else False,
+            "account_status": "ACTIVE" if (p.user and p.user.hashed_password is not None) else "PENDING_ACTIVATION",
             "portal_active": p.user.hashed_password is not None if p.user else False,
         }
         for p in patients

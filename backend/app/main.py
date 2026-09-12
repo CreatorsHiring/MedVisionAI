@@ -14,15 +14,34 @@ def ensure_db_migrations():
         if os.path.exists(db_path):
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
-            cols = [row[1] for row in cursor.execute("PRAGMA table_info(screenings)").fetchall()]
-            if cols and "ai_context" not in cols:
+            
+            # Screenings migrations
+            s_cols = [row[1] for row in cursor.execute("PRAGMA table_info(screenings)").fetchall()]
+            if s_cols and "ai_context" not in s_cols:
                 cursor.execute("ALTER TABLE screenings ADD COLUMN ai_context TEXT;")
                 conn.commit()
-                print("Auto-migrated screenings table with ai_context column.")
-            if cols and "reviewed" not in cols:
+            if s_cols and "reviewed" not in s_cols:
                 cursor.execute("ALTER TABLE screenings ADD COLUMN reviewed BOOLEAN DEFAULT 0;")
                 conn.commit()
-                print("Auto-migrated screenings table with reviewed column.")
+
+            # Users migrations
+            u_cols = [row[1] for row in cursor.execute("PRAGMA table_info(users)").fetchall()]
+            if u_cols and "is_activated" not in u_cols:
+                cursor.execute("ALTER TABLE users ADD COLUMN is_activated BOOLEAN DEFAULT 0;")
+                conn.commit()
+
+            # Patients migrations
+            p_cols = [row[1] for row in cursor.execute("PRAGMA table_info(patients)").fetchall()]
+            if p_cols and "diabetes_type" not in p_cols:
+                cursor.execute("ALTER TABLE patients ADD COLUMN diabetes_type TEXT;")
+                conn.commit()
+            if p_cols and "year_of_diagnosis" not in p_cols:
+                cursor.execute("ALTER TABLE patients ADD COLUMN year_of_diagnosis INTEGER;")
+                conn.commit()
+            if p_cols and "existing_eye_conditions" not in p_cols:
+                cursor.execute("ALTER TABLE patients ADD COLUMN existing_eye_conditions TEXT;")
+                conn.commit()
+
             conn.close()
     except Exception as e:
         print("Migration check note:", e)

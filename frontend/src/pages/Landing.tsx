@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import Lenis from 'lenis';
 import 'lenis/dist/lenis.css';
 import AccordionGallery, { type AccordionGalleryItem } from '../components/AccordionGallery';
+import TrueFocus from '../components/TrueFocus';
 import { 
   Eye, FileText, Users, ArrowRight, 
   Activity, ShieldCheck, Lock, 
@@ -266,9 +267,39 @@ const Landing = () => {
         </section>
 
         {/* ========================================================================= */}
+        {/* CLINICAL MOTTO STATEMENT — TRUE FOCUS ANIMATION */}
+        {/* ========================================================================= */}
+        <section className="border-y border-slate-200/90 bg-white py-16 sm:py-20 text-center overflow-hidden">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+            <div className="flex items-center justify-center gap-2">
+              <span className="font-mono text-[11px] font-semibold tracking-widest uppercase text-[#0F766E] bg-teal-50 border border-teal-200/80 px-3 py-1 rounded-full shadow-2xs">
+                // OUR CORE DIRECTIVE
+              </span>
+            </div>
+
+            <div className="py-2">
+              <TrueFocus 
+                sentence="Screen Earlier.|Explain Better.|Reach Further."
+                separator="|"
+                manualMode={false}
+                blurAmount={5}
+                borderColor="#0F766E"
+                glowColor="rgba(15, 118, 110, 0.45)"
+                animationDuration={0.55}
+                pauseBetweenAnimations={1.1}
+              />
+            </div>
+
+            <p className="text-xs sm:text-sm text-slate-500 max-w-xl mx-auto font-normal leading-relaxed">
+              A tripartite diagnostic commitment: detecting retinopathy before microlesions advance, providing transparent visual reasoning, and bringing specialist-grade triage to every frontline community.
+            </p>
+          </div>
+        </section>
+
+        {/* ========================================================================= */}
         {/* SECTION 2: THE GAP — OLD WAY VS NEW REALITY */}
         {/* ========================================================================= */}
-        <section id="gap" className="border-t border-slate-200/90 bg-white py-20 sm:py-28">
+        <section id="gap" className="border-t border-slate-200/90 bg-[#F8F9FA] py-20 sm:py-28">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-left space-y-10">
             
             <div className="space-y-3">
