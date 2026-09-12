@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Eye, CheckCircle2, Lock, Mail, Calendar, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Lock, Mail, Calendar, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
 
 const SetPassword = () => {
   const [searchParams] = useSearchParams();
@@ -71,10 +71,8 @@ const SetPassword = () => {
       {/* Top Header */}
       <header className="max-w-md w-full mx-auto pt-6 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2 text-slate-900 group">
-          <div className="w-8 h-8 rounded-lg bg-[#0F766E] flex items-center justify-center shadow-xs">
-            <Eye className="w-4 h-4 text-white" />
-          </div>
-          <span className="font-semibold text-sm tracking-tight">MedVision<span className="text-[#0F766E]">AI</span></span>
+          <img src="/logo.png" alt="MedVisionAI Logo" className="w-8 h-8 object-contain group-hover:scale-105 transition-transform" />
+          <span className="font-semibold text-sm tracking-tight font-mono">MedVision<span className="text-[#0F766E]">AI</span></span>
         </Link>
         <Link to="/login" className="text-xs font-medium text-slate-600 hover:text-[#0F766E] transition">
           Back to Login →

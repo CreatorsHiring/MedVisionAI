@@ -33,8 +33,13 @@ def login_access_token(
     db: Session = Depends(get_db), 
     form_data: OAuth2PasswordRequestForm = Depends()
 ):
-    username_clean = form_data.username.lower().strip()
-    user = db.query(User).filter(func.lower(User.username) == username_clean).first()
+    email_clean = form_data.username.lower().strip()
+    
+    # Match user by email address (or prefix handle for legacy doctor/admin seeds)
+    user = db.query(User).filter(
+        (func.lower(User.username) == email_clean) |
+        (func.lower(User.username) == email_clean.split('@')[0])
+    ).first()
     
     # Check if account exists but password not yet set
     if user and user.hashed_password is None:
@@ -53,18 +58,25 @@ def login_access_token(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     if not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    # Set expiration: 5 minutes for clinicians/admins (HIPAA clinical security policy), 30 days for patients
+    if user.role in [UserRole.HEALTHCARE_WORKER, UserRole.ADMIN, UserRole.SPECIALIST]:
+        access_token_expires = timedelta(minutes=5)
+        cookie_max_age = 5 * 60  # 300 seconds (5 minutes)
+    else:
+        access_token_expires = timedelta(days=30)
+        cookie_max_age = 30 * 24 * 60 * 60  # 30 days
+
     access_token = create_access_token(
         data={"sub": user.username, "role": user.role}, expires_delta=access_token_expires
     )
@@ -75,7 +87,7 @@ def login_access_token(
         value=access_token,
         httponly=True,
         samesite="lax",
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        max_age=cookie_max_age,
         path="/"
     )
     

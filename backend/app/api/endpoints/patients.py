@@ -6,12 +6,44 @@ from typing import Optional
 from app.database.session import get_db
 from app.models.user import User, UserRole
 from app.models.patient import Patient
-from app.auth.deps import require_role
+from app.auth.deps import require_role, get_current_user
 from app.core.config import settings
 import uuid
 from datetime import datetime, date
 
 router = APIRouter()
+
+@router.get("/me")
+def get_my_patient_profile(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != UserRole.PATIENT:
+        raise HTTPException(status_code=400, detail="Only patient accounts can access this profile endpoint")
+    
+    patient = db.query(Patient).filter(Patient.user_id == current_user.id).first()
+    if not patient:
+        patient = db.query(Patient).filter(func.lower(Patient.email) == current_user.username.lower().strip()).first()
+        
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient clinical profile not found")
+        
+    return {
+        "id": patient.id,
+        "patient_access_id": patient.patient_access_id,
+        "first_name": patient.first_name,
+        "last_name": patient.last_name,
+        "name": f"{patient.first_name} {patient.last_name}",
+        "email": patient.email,
+        "phone": patient.phone,
+        "date_of_birth": str(patient.date_of_birth) if patient.date_of_birth else None,
+        "diabetes_type": patient.diabetes_type or "Not specified",
+        "year_of_diagnosis": patient.year_of_diagnosis,
+        "existing_eye_conditions": patient.existing_eye_conditions,
+        "clinic_name": "Retinal Care Unit & Diabetic Eye Clinic",
+        "attending_physician": "Dr. Screening",
+    }
+
 
 class CreatePatientRequest(BaseModel):
     first_name: str
